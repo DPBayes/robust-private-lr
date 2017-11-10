@@ -1,0 +1,11 @@
+for i=1:1:70
+    str=cell2str(SelGenes70{i});
+    [temp,~]-strsplit(str,'_');
+    count=0;
+    for j=1:1:length(temp)
+        count=count+1;
+        tempstr=temp{j};
+        c=strfind(GeneNames,tempstr);
+        IND(i).sub(count)=find(~cellfun(@isempty,c));
+    end
+end

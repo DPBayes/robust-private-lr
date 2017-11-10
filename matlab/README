@@ -1,0 +1,51 @@
+OVERVIEW
+
+This folder contains the implementation for the methods that we compared to our 
+robust private linear regression algorithm. These methods use fixed precision 
+parameter values and an even budget split between two sufficient statistics.
+The code is scripted for automatic execution of the experiments for the 
+validation purpose, given the data sets.
+
+Given the size of the data sets and the fact that they are not our original 
+work, they have been removed from the version included as supplementary 
+material.
+
+
+EXECUTE
+
+As the original data files are too large to be included in this package, the 
+input data files have to be created first using the following steps:
+
+1. Do the "step 0" in the Python implementation (see python/README). This 
+produces files GDSC_geneexpr.h5 and GDSC_drugres.h5. Place these files in the 
+matlab/Data/ver3 directory.
+2. Run the Python script matlab/src/h5tocsv.py. This produces files 
+GeneExpression.csv and DrugResponse.csv in matlab/Data/ver3.
+3. Run the Matlab script matlab/src/csvtomat.m. This produces files 
+GeneNames.mat, GeneExpression.mat, DrugResponse.mat, and drug_stats.mat 
+in matlab/Data/ver3.
+
+After this, to run the actual algorithms, run command 
+>> run_rplr_exp
+inside the directory matlab/src.
+
+The privacy parameter epsilon is set in run_rplr_exp.m file on line 221/222. 
+In our experiments, the algorithm was executed in both cases eps=1 and eps=2.
+The algorithm takes several hours to run.
+
+
+DATA AND DIRECTORIES
+
+Data and output directories are set. The code will automatically preprocess the
+data and generate intermediate outputs. The output results from private linear 
+regression (plr), output-perturbed linear regression (oplr), and functional 
+mechanism (fmlr) in directories codir and wodir then have to be converted into 
+csv files using resultstocsv.m scripts inside these directories. The final 
+plots are generated using the Python implementation.
+
+
+READABILITY OF THE SOURCE CODE
+
+The source code is not fully cleaned up and commented, but some comments have 
+been included for quick check. It also contains some additional codes that are 
+not used in our experiments.

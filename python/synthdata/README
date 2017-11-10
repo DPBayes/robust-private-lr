@@ -1,0 +1,65 @@
+Please see the README in directory 'gdscdata' first.
+
+ABOUT
+
+This folder contains the Python language implementation used to study the 
+performance of robust private linear regression mechanism as well as the 
+relevant input and output data. The tests on GDSC drug sensitivity data are in 
+the folder 'gdscdata', and this folder contains some additional tests on 
+synthetic data that are not presented in our paper
+[1] A.Honkela, M.Das, A.Nieminen, O.Dikmen, S.Kaski: Efficient differentially 
+private learning improves drug sensitivity prediction, arXiv:1606.02109.
+
+
+METHODS AND USED ABBREVIATIONS IN FILE NAMES
+
+rplr    = robust private linear regression with sampling
+lr      = non-private linear regression with sampling 
+          (a modified implementation where both privacy and clipping 
+          of the data are left out)
+rlr     = robust non-private linear regression with sampling (a
+          modified implementation where privacy is left out, meaning 
+          no noise is added)
+
+
+REQUIREMENTS
+
+In addition to the standard libraries, the required Python libraries are 
+NumPy, SciPy, Theano, PyMC3 (and any libraries any of these need), and for 
+plotting Matplotlib. The experiments were run on a computer cluster inside 
+Anaconda (v4.1.1) environment with Python 3.5.2, NumPy 1.11.2, SciPy 0.18.1, 
+Theano 0.8.2, and PyMC3 3.0.rc2.
+
+
+DATA
+
+A synthetic data set following the Bayesian linear regression model is 
+generated with n = 1000 samples, dimensionality of d = 10, and precision 
+parameter values lambda = lambda_0 = 1 (see [1]).
+
+
+ORDER OF EXECUTION
+
+Please see the README in directory 'gdscdata' and the corresponding program 
+files for further instructions. Some of the scripts are meant to be run on a 
+computer cluster since they need to be to be executed (in parallel) with 
+several command line argument combinations and take quite a bit of time.
+
+1) gen_synth.py: generate a synthetic data set.
+2) budgetsplit_pre.py: generate synthetic auxiliary data to be used in 
+   budgetsplit_test.py.
+3) budgetsplit_test.py: evaluate the performance with each tested budget split.
+4) budgetsplit_results.py: combine the results and determine the optimal split.
+5) clippingomega.py: find the projection thresholds to be used in tests.
+6) test.py, test_lr.py, test_rlr.py: execute the tests.
+7) testresults.py: combine the test results from step 6.
+8) plotall.py: plot the test results.
+
+
+PROVIDED DATA FILES
+
+- x_data.csv, y_data.csv: synthetic data generated with the script gen_synth.py
+- A-WX.csv, A-WY.csv, B-WX.csv, B-WY.csv: projection thresholds computed with 
+clippingomega.py. 
+- The files in the subdirectory 'resultsdata': test results that can be plotted 
+with the script plotall.py.

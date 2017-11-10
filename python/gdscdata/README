@@ -1,0 +1,368 @@
+ABOUT
+
+This folder contains the Python language implementation used to study the 
+performance of robust private linear regression mechanism as well as the 
+relevant input and output data. For comparison, the output data from other 
+methods are also included. The results from methods 'mcmc-lr' (non-private 
+linear regression with fitted posterior sampling) and 'mcmc-rlr' (robust 
+non-private linear regression with fitted posterior sampling) were obtained 
+using modified versions of this implementation (leaving out privacy and/or 
+clipping), and the results from other below-mentioned methods were obtained 
+using corresponding Matlab implementations. 
+
+
+CITE
+
+The method and the use case are presented and described in our paper:
+A.Honkela, M.Das, A.Nieminen, O.Dikmen, S.Kaski: Efficient differentially 
+private learning improves drug sensitivity prediction, arXiv:1606.02109.
+
+
+METHODS AND USED ABBREVIATIONS IN FILE NAMES
+
+Sampling based methods use priors for precision parameters and optimal budget 
+split between the three sufficient statistics in private versions. The code
+and file names refer to this as 'mcmc' because MCMC sampling was originally
+used, but the final results were actually acquired using ADVI to fit and sample
+from a fitted variational posterior distribution. ADVI was used because it 
+produced similar results as MCMC but significantly faster.
+
+- 'mcmc'          = robust private linear regression (RPLR) with sampling 
+                    (the main provided implementation)
+- 'mcmc-rlr'      = robust non-private linear regression with sampling (a 
+                    modified implementation where privacy is left out, meaning 
+                    no noise is added)
+- 'mcmc-lr'       = non-private linear regression with sampling 
+                    (a modified implementation where both privacy and clipping 
+                    of the data are left out)
+- 'base-mcmc-d10' = non-private baseline linear regression with sampling
+                    and d=10 (not plotted)
+- 'base-mcmc-d64' = non-private baseline linear regression with sampling
+                    and d=64 (not plotted)
+
+Other methods use fixed precision parameters and even budget split between the 
+two sufficient statistics in private versions:
+
+- 'base-fixd-d10' = non-private baseline linear regression with d=10
+- 'base-fixd-d64' = non-private baseline linear regression with d=64
+- 'plr'           = private linear regression (Matlab implementation)
+- 'oplr'          = private output perturbed linear regression (Matlab)
+- 'fmlr'          = private functional mechanism linear regression (Matlab)
+
+
+REQUIREMENTS
+
+In addition to the standard libraries, the required Python libraries are 
+NumPy, SciPy, Theano, PyMC3 (and any libraries any of these need), and for 
+plotting Matplotlib. The experiments were run on a computer cluster inside 
+Anaconda (v4.1.1) environment with Python 3.5.2, NumPy 1.11.2, SciPy 0.18.1, 
+Theano 0.8.2, and PyMC3 3.0.rc2.
+
+
+DATA
+
+The data are from the Genomics of Drug Sensitivity in Cancer (GDSC) project, 
+release 6.1, March 2017, http://www.cancerrxgene.org/, details below and in our
+paper.
+
+
+ORDER OF EXECUTION
+
+Since the most important intermediate results data are included, it is not 
+necessary to run all the steps. For example, to produce the resulting plots 
+represented in the paper but not provided in this package, only the last step 
+7 needs to be run. Steps 2a, 3b, 4, 5a, 5b, 5c are meant to be run on a 
+computer cluster since they need to be executed (in parallel) with several 
+command line argument combinations and take quite a bit of time. A noteworthy 
+detail about cluster computing is that Theano compile directories may need to 
+be specially set for each process in order not to run into issues with Theano's
+compile lock. (The code snippet to do this is included in the beginning of the 
+scripts that are meant to be run on a cluster.) The intermediate results data 
+from the cluster computations are not provided in this package, since they 
+comprise of hundreds of thousands of data files. Also the hdf5 files produced 
+in step 0 from the data downloaded from the GDSC project are not included due 
+to the large file size.
+
+0) Download the GDSC data from http://www.cancerrxgene.org/downloads:
+- Gene expression: 'Expression|Preprocessed|Cell lines|RMA normalised expression data for Cell lines' 
+https://dl.dropboxusercontent.com/u/11929126/sanger1018_brainarray_ensemblgene_rma.txt.gz
+- Drug responses: 'Drug|Preprocessed|Cell lines/Drugs|log(IC50) and AUC values' 
+ftp://ftp.sanger.ac.uk/pub/project/cancerrxgene/releases/release-6.0/v17_fitted_dose_response.xlsx
+Process the data:
+- Extract sanger1018_brainarray_ensemblgene_rma.txt. 
+- Convert v17_fitted_dose_response.xlsx to v17_fitted_dose_response.csv.
+- Conversion table between ensembl gene ids and gene names can be downloaded from 
+http://www.ensembl.org/biomart/martview/ as follows:
+-- Select: Ensembl Genes 88 -> Human genes (GRCh38.p10)
+-- Edit Attributes: Select only 'Gene stable ID' and 'Gene name'.
+-- Click results.
+-- Export to csv. Rename to ensembl_gene_ids.csv
+- Finally, run convert_gdsc.py to produce output hdf5 files:
+OUTPUT: GDSC_geneexpr.h5, GDSC_drugres.h5
+
+1) selectgenes.py
+INPUT: SelGenes70.mat, GenesMutations.mat, MutationCnts.mat, 
+GDSC_geneexpr.h5 (not included), GDSC_drugres.h5 (not included)
+OUTPUT: GeneExpressionReducted.csv, DrugResponse.csv
+TASK: Preprocess data: Order 70 preselected genes in descending order based on 
+their mutation counts in cancer and save them in GeneExpressionReducted.csv 
+(the resulting file contains 64 genes). Save drug responses in 
+DrugResponse.csv.
+
+2a) drugstats.py (cluster)
+INPUT: DrugResponse.csv, command line argument [drugid]
+OUTPUT: drugstats-[drugid].csv
+TASK: Compute the drug statistics needed to evaluate the wpc-index of the 
+drug sensitivity prediction in the later steps. The command line argument 
+[drugid] in 0..264 specifies the drug.
+
+2b) drugstats_combine.py
+INPUT: drugstats-[drugid].csv where [drugid] goes through 0..264 (not included)
+OUTPUT: drugstats.csv
+TASK: Combine the results from step 2a and save them as a csv file.
+
+3a) budgetsplit_pre.py (uses: diffpri.py)
+INPUT: -
+OUTPUT: budgetsplit-data.npz, budgetsplit-noise.npz
+TASK: Choose the optimal privacy budget split with given number n of samples, 
+reduced dimensionality d and privacy budget eps (in our experiments, n=500, 
+d=10, eps=2.0 were used). This _pre.py script generates the synthetic data sets 
+and noise samples used by the next step.
+
+3b) budgetsplit_test.py (cluster) (uses: diffpri.py)
+INPUT: budgetsplit-data.npz, budgetsplit-noise.npz (not included), and 
+command line arguments [i], [j], [k]
+OUTPUT: budgetsplit-result-[i]-[j]-[k].csv
+TASK: Study the performance with each possible split (5% intervals) on 
+generated synthetic data and noise. The command line argument [i] in 0..4 
+defines the synthetic data set, the argument [j] in 0..4 defines the noise 
+sample, and the argument [k] in 0..17 defines the budget split p1. (The reason 
+for this kind of task splitting is a technicality related to the used computer 
+cluster.) The results are saved in an output csv file.
+
+3c) budgetsplit_results.py 
+INPUT: budgetsplit-result-[i]-[j]-[k].csv where [i] goes through 0..4, [j] goes
+through 0..4, and [k] goes through 0..17 (not included)
+OUTPUT: budgetsplit.csv, the optimal budget split p1, p2, p3
+TASK: Combine the results from the computations in the previous step and save 
+the averaged results in budgetsplit.csv. Visualise the results as a colormap. 
+Print out the optimal budget split corresponding to the highest prediction 
+accuracy on the synthetic test cases. The optimal split (in our tests, p1=0.30,
+p2=0.65, p3=0.05) chosen using this script is hardcoded into diffpri.py and 
+used in the next steps.
+
+4) clippingomega.py (cluster) (uses: diffpri.py)
+INPUT: command line argument [test]
+OUTPUT: if [test]=0: A-WX.csv, A-WY.csv; if [test]=2: C-WX.csv, C-WY.csv
+TASK: Choose the optimal values for clipping parameter omega in each test case 
+and save them into output files. The script does this by comparing the 
+performance with different values on synthetic data sets in each test case. 
+The command line argument [test] is either 0 or 2, and both cases should be 
+run to produce all needed output files.
+
+5a) test.py (cluster) (uses: diffpri.py)
+INPUT: GeneExpressionReducted.csv, DrugResponse.csv, A-WX.csv, A-WY.csv, 
+drugstats.csv, and command line argument [drugid]
+OUTPUT: cliptest-drugsens-corr-[epsilon]-[drugid]-[seed].csv, 
+cliptest-drugsens-wpc-[epsilon]-[drugid]-[seed].csv for [seed] in 0..49
+TASK: Evaluate the performance of the RPLR mechanism in the test cases defined 
+in the code. The performance is evaluated both in terms of Spearman's rank 
+correlation coefficient (output file: corr) and wpc-index (output file: wpc). 
+The command line argument [drugid] in 0..264 defines the drug. The script does 
+50 cross-validation folds and saves the results in the output csv files, where 
+[epsilon] in the filename is a string set in the script that identifies the 
+used privacy budget value. 
+
+5b) tensor.py (cluster) (uses: diffpri.py)
+INPUT: GeneExpressionReducted.csv, DrugResponse.csv, A-WX.csv, A-WY.csv, 
+C-WX.csv, C-WY.csv, and command line arguments [drugid], [seed], [test]
+OUTPUT: cliptest-drugsens-[tensor]-[drugid]-[seed].csv
+TASK: Evaluate the performance of the RPLR mechanism on a tensor of test cases 
+defined in the code. The performance is evaluated in terms of Spearman's rank 
+correlation coefficient. The command line argument [drugid] in 0..264 defines 
+the drug, [seed] in 0..49 defines the seed (cross-validation fold), and [test] 
+in 0..2 defines the trade-off tensor of test cases. The results are saved in 
+the output csv files, where [tensor] is a string that denotes the used [test] 
+argument: A=0, B=1, C=2.
+
+5c) baseline.py (cluster) (uses: diffpri.py)
+INPUT: GeneExpressionReducted.csv, DrugResponse.csv, drugstats.csv, and command
+line argument [drugid]
+OUTPUT: base-[measure]-[method]-[dimension]-[drugid]-[seed].csv
+TASK: Evaluate the baseline performance on the test case (10 non-private data 
+points). The performance is evaluated in terms of Spearman's rank correlation 
+coefficient and wpc-index. The command line argument [drugid] in 0..264 defines 
+the drug. The code does 50 cross-validation folds for each method. The results 
+are saved in eight output csv files, where [measure] = corr / wpc denotes the 
+performance measure, [method] = fixd / mcmc denotes the used method (fixed 
+parameters / priors), [dimension] = d10 / d64 denotes the 
+dimensionality of the used data, and [seed] in 0..49 denotes the cv fold.
+
+6a) testresults.py
+INPUT: drugstats.csv, cliptest-drugsens-corr-[epsilon]-[drugid]-[seed].csv (not
+included), cliptest-drugsens-wpc-[epsilon]-[drugid]-[seed].csv (not included), 
+where [epsilon] is fixed, [drugid] goes through all 0..264, [seed] goes through 
+all 0..49
+OUTPUT: [measure]-[epsilon]-[method]-mean.csv, 
+[measure]-[epsilon]-[method]-std.csv
+TASK: Combine the intermediate results from step 5a and compute the averaged 
+performance over all drugs and cross-validation in each test case. If 
+corr = True, combines the Spearman's rank correlation coefficient results and 
+outputs a file with [measure] = corr. If wpc = True, combines the wpc-index 
+results and outputs a file with [measure] = wpc. The average performance over 
+cross-validation is saved into the outputted [...]-mean.csv file and the 
+standard deviation of this performance over cross-validation is saved into the 
+outputted [...]-std.csv file. In this version, [method] = mcmc. Directories and
+filenames may need to be adjusted in the code to match the used setting. 
+Displays an error message in case of incomplete or missing files.
+
+6b) tensorresults.py
+INPUT: cliptest-drugsens-[tensor]-[drugid]-[seed].csv, where [tensor] goes 
+through all {A,B,C}, [drugid] goes through all 0..264, [seed] goes through all 
+0..49
+OUTPUT: tensor-A-mean.csv, tensor-A-std.csv, tensor-B-mean.csv, 
+tensor-B-std.csv, tensor-C-mean.csv, tensor-C-std.csv
+TASK: Combine the intermediate results from step 5b and compute the averaged 
+performance over all drugs and cross-validation in each test case. The average 
+performance over cross-validation is saved into the outputted [...]-mean.csv 
+file and the standard deviation of this performance over cross-validation is 
+saved into the outputted [...]-std.csv file. Displays an error message in case 
+of incomplete or missing files.
+
+6c) baselineresults.py
+INPUT: base-[measure]-[method]-[dimension]-[drugid]-[seed].csv (not included), 
+with all combinations of [measure] in {corr,wpc}, [method] in {fixd,mcmc}, 
+[dimension] in {d10,d64}, [drugid] in 0..264, [seed] in 0..49
+OUTPUT: [measure]-e0-[method]-[dimension].csv
+TASK: Combine the intermediate results from step 5c and compute the averaged
+performance over all drugs and cross-validation in the test case. If 
+corr = True, combines the Spearman's rank correlation coefficient results and 
+outputs a file with [measure] = corr. If wpc = True, combines the wpc-index 
+results and outputs a file with [measure] = wpc. Directories and filenames have 
+to be adjusted in the code to match the each used setting. Displays an error 
+message in case of incomplete or missing files.
+
+7) plotall.py
+INPUT: the contents of the folder /resultsdata produced by testresults.py, 
+tensorresults.py, baselineresults.py, budgetsplit.py
+OUTPUT: figures in .eps format
+TASK: Plot the combined results from the previous steps. Save the figures.
+
+
+PROVIDED DATA FILES
+
+- GeneNames.mat, SelGenes70.mat, GenesMutations.mat, MutationCnts.mat 
+(Important genes and mutation counts.)
+- GeneExpressionReducted.csv, DrugResponse.csv (985 cell lines x 64 genes; 
+985 cell lines x 265 drug responses. Produced from above-mentioned .mat files 
+and previously mentioned .h5 files using selectgenes.py.)
+- drugstats.csv (Drug statistics for wpc-index computation.)
+- A-WX.csv, A-WY.cs, C-WX.csv, C-WY.csv (Omega parameters for clipping 
+thresholds in each test case, produced with clippingomega.py.)
+- budgetsplit.csv (A comparison between different privacy budget splits, 
+produced with budgetsplit.py. Can be plotted with plotall.py (line graphs).)
+
+- Files starting with 'corr' or 'wpc':
+        Accuracy results of drug sensitivity prediction from tests, where
+        dimensionality = 10, non-private data size = 10, private 
+        data size = {0,100,200,300,400,500,600,700,800}, and (depending on 
+        filename):
+                e0 = no privacy, no epsilon used (also: private data size = 0)
+                e1 = epsilon equals 1
+                e2 = epsilon equals 2,
+        precision measure is:
+                corr = Spearman's rank correlation coefficient
+                wpc  = weighted probability concordance index,
+        and the used method is indicated with an abbreviation specified above.
+        Data:
+                -mean.csv or just .csv = average over 50 Monte Carlo 
+                                         cross-validation folds
+                -std.csv               = standard deviation over 50 Monte Carlo
+                                         cross-validation folds
+        Produced with test.py, testresults.py, baseline.py, baselineresults.py,
+        modified versions, and Matlab implementation. Plotted with plotall.py.
+
+- Files starting with 'tensor':
+        Data for illustrating the key trade-offs in differentially private 
+        learning:
+                A = private data size vs. reduced dimensionality
+                B = private data size vs. non-private data size
+                C = private data size vs. privacy parameter
+        Data:
+                -mean.csv = average over 50 Monte Carlo cross-validation folds
+                -std.csv  = standard deviation over 50 Monte Carlo 
+                            cross-validation folds
+        Precision measure is Spearman's rank correlation coefficient.
+        Produced with tensor.py, tensorresults.py. Plotted with plotall.py.
+
+
+PROVIDED CODE FILES
+
+All code should be adequately commented. User may need to modify variables 
+that specify file paths and some other details, depending on usage.
+
+- diffpri.py: All important tools for robust private linear regression 
+              algorithm tests. Also contains some additional features.
+- convert_gdsc.py: Convert the downloaded GDSC data into .h5 files.
+- selectgenes.py: Selects the most important genes from gene expression, 
+                  produces files GeneExpressionReducted.csv, DrugResponse.csv.
+- drugstats.py: Computes the drug statistics (needed to evaluate wpc-index 
+                values) of the drug given as command line argument [drugid] 
+                = 0..264. Produces 265 output csv files.
+- drugstats_combine.py: Reads in the 265 csv files produced by drugstats.py and
+                        saves the combined results in drugstats.csv.
+- budgetsplit_pre.py: Generates synthetic data and noise to be used in 
+                      budgetsplit_test.py. Produces two .npz files.
+- budgetsplit_test.py: Evaluates the performance with each tested budget split 
+                       on the synthetic data and noise. Runs one test defined 
+                       by command line arguments: [i], [j], [k]. In our 
+                       experiments, we ran this program on a computer cluster
+                       for all combinations of [i] = 0..4, [j] = 0..4, [k] =
+                       0..17. This produces 450 output csv files.
+- budgetsplit_results.py: Reads in the 450 csv files produced by 
+                          budgetsplit_test.py and computes the final results 
+                          and the optimal budget split. Plots a color plot 
+                          comparison between different privacy budget splits.
+- clippingomega.py: Finds the omega parameters for clipping thresholds using 
+                    auxiliary data method. Produces files A-WX.csv, A-WY.csv, 
+                    C-WX.csv, C-WY.csv.
+- tensor.py: Tests illustrating the key trade-offs in differentially private 
+             learning: private data size vs. A) reduced dimensionality, 
+             B) non-private data size, C) privacy parameter. Runs one test 
+             defined by command line arguments: [drugid], [seed], [test]. In 
+             our experiments, we ran this program on a computer cluster for 
+             all combinations of [drugid] = 0..265, [seed] = 0..49, 
+             test = 0..2. This produces 39750 output csv files.	
+- tensorresults.py: Reads in the 39750 csv files produced by tensor.py and 
+                    computes the final results (provided as 'tensor-[...].csv' 
+                    files in /resultsdata).
+- test.py: Accuracy results of drug sensitivity prediction from tests, where 
+           dimensionality = 10, non-private data size = 10, private data size 
+           = {0,100,200,300,400,500,600,700,800}. Runs 50 cross-validation 
+           folds on the drug defined by the command line argument [drugid]. In 
+           our experiments, we ran this program on a computer cluster for all 
+           [drugid] = 0..265. This produces 13250 output csv files. User can 
+           set the privacy parameter (eps=1 or eps=2 in our experiments).
+- testresults.py: Reads in the 13250 csv files produced by test.py and computes 
+                  the final results (provided as 'corr-[...].csv' and 
+                  'wpc-[...].csv' files in /resultsdata).
+- test_lr.py: A modified version of test.py. Executes the non-private method 
+              ('mcmc-lr') instead of the regular method. No privacy,
+              no clipping.
+- test_rlr.py: A modified version of test.py. Executes the non-private robust 
+               method ('mcmc-rlr') instead of the regular method. No privacy, 
+               but clipping is done.
+- baseline.py: Baseline performance in the case where data consists of 10 
+               non-private samples. Runs 50 cross-validation folds on the drug 
+               defined by the command line argument [drugid]. In our 
+               experiments, we ran this program on a computer cluster for all 
+               [drugid] = 0..265. This produces 106000 output csv files.
+- baselineresults.py: Reads in the 106000 files produced by baseline.py and 
+                      computes the final results (provided as 
+                      'corr-e0-base-[...].csv' and 'wpc-e0-base-[...].csv' 
+                      files in /resultsdata).
+- resultstocsv.m: Used to convert the results from the Matlab implementation 
+                  into .csv files.
+- plotall.py: Plots results data produced by tensorresults.py, testresults.py,
+              baselineresults.py, and budgetsplit.py (provided in /resultsdata).
+
